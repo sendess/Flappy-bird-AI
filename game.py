@@ -3,10 +3,11 @@ import os
 import time
 import random
 import neat
+from neat.config import Config
 pygame.font.init()
 
 WIN_WIDTH = 500
-WIN_HEIGHT = 1000
+WIN_HEIGHT = 900
 JUMPER_IMG = [pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","jumper1.png"))),pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","jumper2.png"))),pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","jumper3.png")))]
 OBSTACLE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","obstacle.png")))
 BGND_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","background.png")))
@@ -152,12 +153,25 @@ def draw_window(win,jumper,obstacle,ground,score):
     text = STAT_FONT.render("Score : " + str(score), 1, (255,255,255))
     win.blit(text,(WIN_WIDTH-10-text.get_width(),10))
     ground.draw(win)
-    jumper.draw(win)
+    for jumping_jack in jumper:
+        
+        jumping_jack.draw(win)
     pygame.display.update()
     
-def main():
+def main(genomes,config):
+    nets = []
+    ge = []
+    jumping_jacks = []
+    
+    for _ , g in genomes:
+        net = neat.nn.FeedForwardNetwork.create(g,config)
+        nets.append(net)
+        jumping_jacks.append(jumper(230,350))
+        g.fitness = 0
+        ge.append(g)
+    
     score = 0
-    jumping_jack = jumper(230,350)
+    
     grounds = ground(730)
     obstacles = [obstacle(600)]
     run = True
@@ -168,37 +182,82 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-        draw_window(win,jumping_jack,obstacles,grounds,score)
+                pygame.quit()
+                quit()
+
         
+        draw_window(win,jumping_jacks,obstacles,grounds,score)
+        
+        obs_ind = 0
+
+        if len(jumping_jacks) > 0:
+            if len(obstacles) >1 and jumping_jacks[0].x > obstacles[0].x + obstacles[0].OBSTACLE_TOP.get_width():
+                obs_ind = 1
+        else:
+            run = False
+            break      
+          
+        for x , jumping_jack in enumerate(jumping_jacks):
+            jumping_jack.move()
+            ge[x].fitness += 0.1
+            
+            output = nets[x].activate((jumping_jack.y,abs(jumping_jack.y - obstacles[obs_ind].height), abs(jumping_jack.y - obstacles[obs_ind].bottom)))
+
+            if output[0] > 0.5:
+                jumping_jack.jump()
+
         add_obs = False
         rem = []
         for obs in obstacles:
-            if obs.collide(jumping_jack):
-                pass
+            for x,jumping_jack in enumerate(jumping_jacks):
+                
+                if obs.collide(jumping_jack):
+                    ge[x].fitness -= 1
+                    jumping_jacks.pop(x)
+                    nets.pop(x)
+                    ge.pop(x)
+                
+                if not obs.passed and obs.x < jumping_jack.x:
+                    obs.passed = True
+                    add_obs = True
+                    
             if obs.x+obs.OBSTACLE_TOP.get_width() < 0:
                 rem.append(obs)
             
-            if not obs.passed and obs.x < jumping_jack.x:
-                obs.passed = True
-                add_obs = True
                 
             obs.move()
         if add_obs:
             score += 1
-            obstacles.append(obstacle(700))
+            
+            for g in ge:
+                g.fitness += 5
+
+            obstacles.append(obstacle(600))
             
         for r in rem:
             obstacles.remove(r)   
             
-            
-        if jumping_jack.y + jumping_jack.img.get_height() > 730:
-            # print ("HIT_GROUND")
-            pass
+        for x,jumping_jack in enumerate(jumping_jacks):
+            if jumping_jack.y + jumping_jack.img.get_height() > 730 or jumping_jack.y <0:
+                # print ("HIT_GROUND")
+                jumping_jacks.pop(x)
+                nets.pop(x)
+                ge.pop(x)
         
         grounds.move()
         jumping_jack.move()
-    
-    pygame.quit()
-    quit()
 
-main()
+
+
+def run(config_path):
+    config = neat.config.Config(neat.DefaultGenome, neat.DefaultReproduction,neat.DefaultSpeciesSet, neat.DefaultStagnation, config_path)
+    p = neat.Population(config)
+    p.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    p.add_reporter(stats)
+    winner = p.run(main,50)
+    
+if __name__ == "__main__":
+    local_dir = os.path.dirname(__file__)
+    config_path = os.path.join(local_dir,"config.txt")
+    run(config_path)
