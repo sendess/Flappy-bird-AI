@@ -3,6 +3,7 @@ import os
 import time
 import random
 import neat
+pygame.font.init()
 
 WIN_WIDTH = 500
 WIN_HEIGHT = 1000
@@ -10,6 +11,7 @@ JUMPER_IMG = [pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","ju
 OBSTACLE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","obstacle.png")))
 BGND_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","background.png")))
 GND_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("imgs","ground.png")))
+STAT_FONT = pygame.font.SysFont("jokerman",50)
 
 class jumper:
     IMGS = JUMPER_IMG
@@ -142,29 +144,58 @@ class ground:
         win.blit(self.IMG, (self.x1,self.y)) 
         win.blit(self.IMG, (self.x2,self.y))
 
-def draw_window(win,jumper,obstacle,ground):
+def draw_window(win,jumper,obstacle,ground,score):
     win.blit(BGND_IMG,(0,0))
     
     for obs in obstacle:
         obs.draw(win)
-    
+    text = STAT_FONT.render("Score : " + str(score), 1, (255,255,255))
+    win.blit(text,(WIN_WIDTH-10-text.get_width(),10))
     ground.draw(win)
     jumper.draw(win)
     pygame.display.update()
     
 def main():
+    score = 0
     jumping_jack = jumper(230,350)
     grounds = ground(730)
-    obstacles = [obstacle(700)]
+    obstacles = [obstacle(600)]
     run = True
     win = pygame.display.set_mode((WIN_WIDTH,WIN_HEIGHT))
     clock = pygame.time.Clock()
     while run:
-        clock.tick(30)
+        clock.tick(40)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-        draw_window(win,jumping_jack,obstacles,grounds)
+        draw_window(win,jumping_jack,obstacles,grounds,score)
+        
+        add_obs = False
+        rem = []
+        for obs in obstacles:
+            if obs.collide(jumping_jack):
+                pass
+            if obs.x+obs.OBSTACLE_TOP.get_width() < 0:
+                rem.append(obs)
+            
+            if not obs.passed and obs.x < jumping_jack.x:
+                obs.passed = True
+                add_obs = True
+                
+            obs.move()
+        if add_obs:
+            score += 1
+            obstacles.append(obstacle(700))
+            
+        for r in rem:
+            obstacles.remove(r)   
+            
+            
+        if jumping_jack.y + jumping_jack.img.get_height() > 730:
+            # print ("HIT_GROUND")
+            pass
+        
+        grounds.move()
         jumping_jack.move()
     
     pygame.quit()
